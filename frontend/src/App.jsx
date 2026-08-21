@@ -121,7 +121,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/analyze-job",
+        "https://itcpl-ai-compliance.onrender.com/analyze-job",
         {
           method: "POST",
           body: formData
@@ -145,7 +145,7 @@ function App() {
               if (data.saved_job?.job_id) {
           try {
             const savedResponse = await fetch(
-              `http://127.0.0.1:8000/jobs/${data.saved_job.job_id}`
+              `https://itcpl-ai-compliance.onrender.com/jobs/${data.saved_job.job_id}`
             );
 
             if (!savedResponse.ok) {
@@ -192,7 +192,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/jobs"
+        "https://itcpl-ai-compliance.onrender.com/jobs"
       );
 
       if (!response.ok) {
@@ -224,7 +224,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/jobs/${jobId}`
+        `https://itcpl-ai-compliance.onrender.com/jobs/${jobId}`
       );
 
       if (!response.ok) {
@@ -265,7 +265,7 @@ function App() {
 
   try {
     const response = await fetch(
-      `http://127.0.0.1:8000/labs/${labId}/review`,
+      `https://itcpl-ai-compliance.onrender.com/labs/${labId}/review`,
       {
         method: "PATCH",
         headers: {
@@ -353,7 +353,7 @@ function App() {
     // Refresh history list in background
     try {
       const jobsResponse = await fetch(
-        "http://127.0.0.1:8000/jobs"
+        "https://itcpl-ai-compliance.onrender.com/jobs"
       );
 
       if (jobsResponse.ok) {
