@@ -121,7 +121,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "https://itcpl-ai-compliance.onrender.com/analyze-job",
+        "https://itcpl-ai-compliance-production.up.railway.app/analyze-job",
         {
           method: "POST",
           body: formData
@@ -145,7 +145,7 @@ function App() {
               if (data.saved_job?.job_id) {
           try {
             const savedResponse = await fetch(
-              `https://itcpl-ai-compliance.onrender.com/jobs/${data.saved_job.job_id}`
+              `https://itcpl-ai-compliance-production.up.railway.app/jobs/${data.saved_job.job_id}`
             );
 
             if (!savedResponse.ok) {
@@ -192,7 +192,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "https://itcpl-ai-compliance.onrender.com/jobs"
+        "https://itcpl-ai-compliance-production.up.railway.app/jobs"
       );
 
       if (!response.ok) {
@@ -224,7 +224,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `https://itcpl-ai-compliance.onrender.com/jobs/${jobId}`
+        `https://itcpl-ai-compliance-production.up.railway.app/jobs/${jobId}`
       );
 
       if (!response.ok) {
@@ -265,7 +265,7 @@ function App() {
 
   try {
     const response = await fetch(
-      `https://itcpl-ai-compliance.onrender.com/labs/${labId}/review`,
+      `https://itcpl-ai-compliance-production.up.railway.app/labs/${labId}/review`,
       {
         method: "PATCH",
         headers: {
@@ -353,7 +353,7 @@ function App() {
     // Refresh history list in background
     try {
       const jobsResponse = await fetch(
-        "https://itcpl-ai-compliance.onrender.com/jobs"
+        "https://itcpl-ai-compliance-production.up.railway.app/jobs"
       );
 
       if (jobsResponse.ok) {
