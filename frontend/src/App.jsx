@@ -41,7 +41,7 @@ function App() {
 
   const [reviewedBy, setReviewedBy] =
     useState("Lab Engineer");
-const API_URL = "http://localhost:8001";
+const API_URL = "https://itcpl-ai-compliance-git-692058557532.us-east4.run.app";
 
   const UploadCard = ({ title, subtitle, file, setFile }) => {
     return (
