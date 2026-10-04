@@ -92,6 +92,13 @@ def save_analysis(
                         "issues",
                         []
                     )
+                ),
+
+                report_details=json.dumps(
+                    report_data.get(
+                        "test_details",
+                        []
+                    )
                 )
             )
 

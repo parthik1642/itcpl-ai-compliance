@@ -109,6 +109,11 @@ class LabResult(Base):
         nullable=True
     )
 
+    report_details = Column(
+        Text,
+        nullable=True
+    )
+
     review_status = Column(
         String,
         nullable=True

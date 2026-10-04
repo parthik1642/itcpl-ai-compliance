@@ -17,7 +17,18 @@ function App() {
   const [jobs, setJobs] = useState([]);
   const [jobsLoading, setJobsLoading] = useState(false);
 
+  // Separate ISO / NABL report compliance page.
+  // These results never change normal technical job statuses.
+  const [complianceReport, setComplianceReport] = useState(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+  const [complianceResult, setComplianceResult] = useState(null);
+  const [selectedComplianceReport, setSelectedComplianceReport] =
+    useState(null);
+
   const [selectedHistoryJob, setSelectedHistoryJob] =
+    useState(null);
+
+  const [selectedHistoryLab, setSelectedHistoryLab] =
     useState(null);
 
   const [historyLoading, setHistoryLoading] =
@@ -30,59 +41,24 @@ function App() {
 
   const [reviewedBy, setReviewedBy] =
     useState("Lab Engineer");
+const API_URL = "http://localhost:8001";
 
-
-  const UploadCard = ({
-    title,
-    file,
-    setFile
-  }) => {
+  const UploadCard = ({ title, subtitle, file, setFile }) => {
     return (
-      <label
-        className={`upload-box ${
-          file ? "selected" : ""
-        }`}
-      >
+      <label className={`simple-upload-box ${file ? "selected" : ""}`}>
         <input
           type="file"
           accept=".pdf"
           hidden
-          onChange={(e) =>
-            setFile(e.target.files[0])
-          }
+          onChange={(e) => setFile(e.target.files[0])}
         />
-
-        <div className="upload-icon">
-          📄
-        </div>
-
-        <div className="upload-box-content">
-          <strong>
-            {title}
-          </strong>
-
-          {!file ? (
-            <>
-              <span>
-                Click to choose PDF
-              </span>
-
-              <small>
-                PDF files only
-              </small>
-            </>
-          ) : (
-            <>
-              <span className="selected-file">
-                ✓ {file.name}
-              </span>
-
-              <small>
-                Click to replace file
-              </small>
-            </>
-          )}
-        </div>
+        <div className="simple-upload-icon">↑</div>
+        <strong>{title}</strong>
+        <span className="simple-upload-subtitle">{subtitle}</span>
+        <span className={file ? "simple-file-name" : "simple-upload-action"}>
+          {file ? `✓ ${file.name}` : "Click to upload PDF"}
+        </span>
+        <small>{file ? "Click to replace" : "PDF files only"}</small>
       </label>
     );
   };
@@ -121,7 +97,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "https://itcpl-ai-compliance-production.up.railway.app/analyze-job",
+        `${API_URL}/analyze-job`,
         {
           method: "POST",
           body: formData
@@ -145,7 +121,7 @@ function App() {
               if (data.saved_job?.job_id) {
           try {
             const savedResponse = await fetch(
-              `https://itcpl-ai-compliance-production.up.railway.app/jobs/${data.saved_job.job_id}`
+              `${API_URL}/jobs/${data.saved_job.job_id}`
             );
 
             if (!savedResponse.ok) {
@@ -186,13 +162,62 @@ function App() {
   };
 
 
+  const analyzeReportCompliance = async () => {
+    if (!complianceReport) {
+      return;
+    }
+
+    setComplianceLoading(true);
+    setError("");
+    setComplianceResult(null);
+    setSelectedComplianceReport(null);
+
+    const formData = new FormData();
+
+    formData.append(
+      "reports_file",
+      complianceReport
+    );
+
+    try {
+      const response = await fetch(
+        `${API_URL}/analyze-report-compliance`,
+        {
+          method: "POST",
+          body: formData
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail ||
+          "ISO / NABL report compliance check failed."
+        );
+      }
+
+      setComplianceResult(data);
+
+    } catch (err) {
+      setError(
+        err.message ||
+        "ISO / NABL report compliance check failed."
+      );
+
+    } finally {
+      setComplianceLoading(false);
+    }
+  };
+
+
   const loadJobs = async () => {
     setJobsLoading(true);
     setError("");
 
     try {
       const response = await fetch(
-        "https://itcpl-ai-compliance-production.up.railway.app/jobs"
+        `${API_URL}/jobs`
       );
 
       if (!response.ok) {
@@ -220,11 +245,12 @@ function App() {
   const loadHistoryJob = async (jobId) => {
     setHistoryLoading(true);
     setSelectedHistoryJob(null);
+    setSelectedHistoryLab(null);
     setError("");
 
     try {
       const response = await fetch(
-        `https://itcpl-ai-compliance-production.up.railway.app/jobs/${jobId}`
+        `${API_URL}/jobs/${jobId}`
       );
 
       if (!response.ok) {
@@ -265,7 +291,7 @@ function App() {
 
   try {
     const response = await fetch(
-      `https://itcpl-ai-compliance-production.up.railway.app/labs/${labId}/review`,
+      `${API_URL}/labs/${labId}/review`,
       {
         method: "PATCH",
         headers: {
@@ -353,7 +379,7 @@ function App() {
     // Refresh history list in background
     try {
       const jobsResponse = await fetch(
-        "https://itcpl-ai-compliance-production.up.railway.app/jobs"
+        `${API_URL}/jobs`
       );
 
       if (jobsResponse.ok) {
@@ -538,6 +564,13 @@ function App() {
           ?.missing_tests ||
         [],
 
+      test_details:
+        reportData
+          ?.test_details ||
+        savedLab
+          ?.report_details ||
+        [],
+
       final_status:
         finalData
           ?.final_status ||
@@ -593,90 +626,157 @@ function App() {
   };
 
 
+  const resultLines = (detail) => {
+    const results = detail?.test_results || {};
+    const lines = [];
+
+    if (Array.isArray(results.readings) && results.readings.length) {
+      lines.push(`Readings: ${results.readings.join(", ")}`);
+    }
+
+    if (results.average !== null && results.average !== undefined) {
+      lines.push(`Average: ${results.average}`);
+    }
+
+    if (results.temperature_c !== null && results.temperature_c !== undefined) {
+      lines.push(`Temperature: ${results.temperature_c} °C`);
+    }
+
+    if (results.single_minimum !== null && results.single_minimum !== undefined) {
+      lines.push(`Single minimum: ${results.single_minimum} J`);
+    }
+
+    if (results.average_minimum !== null && results.average_minimum !== undefined) {
+      lines.push(`Average minimum: ${results.average_minimum} J`);
+    }
+
+    if (results.elements && Object.keys(results.elements).length) {
+      Object.entries(results.elements).forEach(([name, values]) => {
+        const limits = [];
+        if (values.minimum !== undefined) limits.push(`min ${values.minimum}`);
+        if (values.maximum !== undefined) limits.push(`max ${values.maximum}`);
+        lines.push(`${name.toUpperCase()}: ${values.result}${limits.length ? ` (${limits.join(", ")})` : ""}`);
+      });
+    }
+
+    if (Array.isArray(results.parameters) && results.parameters.length) {
+      results.parameters.forEach((item) => {
+        lines.push(`${item.parameter}: ${item.values?.join(", ") || item.raw || "-"}`);
+      });
+    }
+
+    if (results.scale) lines.push(`Scale: ${results.scale}`);
+    if (results.requirement_text) lines.push(`Requirement: ${results.requirement_text}`);
+    if (results.applied_load_kn !== null && results.applied_load_kn !== undefined) {
+      lines.push(`Applied load: ${results.applied_load_kn} kN`);
+    }
+    if (results.required_load_kn !== null && results.required_load_kn !== undefined) {
+      lines.push(`Required load: ${results.required_load_kn} kN`);
+    }
+    if (results.specimen_orientation) lines.push(`Orientation: ${results.specimen_orientation}`);
+    if (results.observation) lines.push(`Observation: ${results.observation}`);
+    if (results.etchant) lines.push(`Etchant: ${results.etchant}`);
+    if (results.reported_conformity) lines.push(`Report conclusion: ${results.reported_conformity}`);
+
+    return lines.length ? lines : [detail?.completed ? "Output could not be extracted automatically." : "Required report not uploaded."];
+  };
+
+
+  const TestChecklist = ({ lab }) => {
+    const details = lab?.test_details || lab?.report_details || [];
+
+    if (!details.length) {
+      return (
+        <div className="test-checklist-empty">
+          Detailed test outputs are not available for this saved analysis.
+        </div>
+      );
+    }
+
+    return (
+      <div className="test-checklist">
+        <div className="test-checklist-header">
+          <span>Required Test</span>
+          <span>Completion</span>
+          <span>Result / Output</span>
+          <span>Status</span>
+        </div>
+
+        {details.map((detail, index) => (
+          <div className="test-checklist-row" key={`${detail.test}-${detail.page_number || "missing"}-${index}`}>
+            <div>
+              <strong>{formatTestName(detail.test)}</strong>
+              {detail.page_number && <small>Report page {detail.page_number}</small>}
+            </div>
+
+            <span className={detail.completed ? "completion done" : "completion missing"}>
+              {detail.completed ? "Done" : "Not Done"}
+            </span>
+
+            <div className="result-output">
+              {resultLines(detail).map((line, lineIndex) => (
+                <div key={lineIndex}>{line}</div>
+              ))}
+              {detail.issues?.length > 0 && detail.issues.map((issue, issueIndex) => (
+                <div className="result-issue" key={`issue-${issueIndex}`}>{issue}</div>
+              ))}
+            </div>
+
+            <span className={`status-text ${(detail.status || "review").toLowerCase()}`}>
+              {detail.status || "REVIEW"}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+
   return (
     <div className="app">
 
-      {/* HEADER */}
+      {/* SIMPLE HEADER */}
+      <header className="header simple-header">
+        <div className="simple-header-inner">
+          <div className="simple-brand">
+            <img className="official-logo" src="/itcpl-logo.png" alt="ITCPL" />
+            <div>
+             
+            </div>
+          </div>
 
-      <header className="header">
-        <div>
-
-          <h1>
-            ITCPL AI Compliance System
-          </h1>
-
-          <p>
-            AI-powered document and test
-            compliance analysis
-          </p>
-
-
-          <div className="top-nav">
-
+          <nav className="top-nav">
             <button
-              className={
-                activeView === "analyze"
-                  ? "nav-button active"
-                  : "nav-button"
-              }
-              onClick={() => {
-                setActiveView(
-                  "analyze"
-                );
-
-                setSelectedHistoryJob(
-                  null
-                );
-              }}
+              className={activeView === "analyze" ? "nav-button active" : "nav-button"}
+              onClick={() => { setActiveView("analyze"); setSelectedHistoryJob(null); }}
             >
               Analyze Job
             </button>
-
-
             <button
-              className={
-                activeView === "history"
-                  ? "nav-button active"
-                  : "nav-button"
-              }
-              onClick={() => {
-                setActiveView(
-                  "history"
-                );
-
-                setSelectedLab(
-                  null
-                );
-              }}
+              className={activeView === "history" ? "nav-button active" : "nav-button"}
+              onClick={() => { setActiveView("history"); setSelectedLab(null); }}
             >
               Job History
             </button>
-
-          </div>
-
+            <button
+              className={activeView === "compliance" ? "nav-button active" : "nav-button"}
+              onClick={() => { setActiveView("compliance"); setSelectedLab(null); setSelectedHistoryJob(null); }}
+            >
+              ISO / NABL
+            </button>
+          </nav>
         </div>
       </header>
 
-
-      <main className="container">
-
+      <main className="container simple-container">
         {/* ANALYZE VIEW */}
 
         {activeView === "analyze" && (
           <>
 
-            <div className="page-title">
-
-              <h2>
-                Analyze New Job
-              </h2>
-
-              <p>
-                Upload the Purchase Order,
-                Job Order and Test Reports
-                to run compliance validation.
-              </p>
-
+            <div className="page-title analyze-title">
+              <h2>Analyze New Job</h2>
+              <p>Upload documents to validate client requirements against laboratory test reports.</p>
             </div>
 
 
@@ -685,7 +785,9 @@ function App() {
               <div className="upload-grid">
 
                 <UploadCard
+                  step="01"
                   title="Purchase Order"
+                  subtitle="Client PO / Offer Letter"
                   file={purchaseOrder}
                   setFile={
                     setPurchaseOrder
@@ -694,7 +796,9 @@ function App() {
 
 
                 <UploadCard
+                  step="02"
                   title="Job Order"
+                  subtitle="ITCPL Job Work Letter"
                   file={jobOrder}
                   setFile={
                     setJobOrder
@@ -703,7 +807,9 @@ function App() {
 
 
                 <UploadCard
+                  step="03"
                   title="Test Reports"
+                  subtitle="Laboratory Test Reports"
                   file={testReports}
                   setFile={
                     setTestReports
@@ -728,7 +834,7 @@ function App() {
                 {
                   loading
                     ? "Analyzing Documents..."
-                    : "Analyze Documents"
+                    : "Analyze Documents  →"
                 }
               </button>
 
@@ -1055,6 +1161,15 @@ function App() {
                   </div>
 
                 )}
+
+
+                <div className="detail-section test-results-section">
+                  <h3>Required Tests & Test Outputs</h3>
+                  <p className="section-help">
+                    Every client-required test is listed below. Missing reports are shown as Not Done; completed reports show the extracted test output.
+                  </p>
+                  <TestChecklist lab={selectedLab} />
+                </div>
 
 
                 <div className="detail-grid">
@@ -1713,9 +1828,16 @@ function App() {
                         (lab) => (
 
                           <div
-                            className="table-row"
+                            className="table-row clickable"
                             key={
                               lab.lab_no
+                            }
+                            onClick={() =>
+                              setSelectedHistoryLab(
+                                selectedHistoryLab?.lab_no === lab.lab_no
+                                  ? null
+                                  : lab
+                              )
                             }
                           >
 
@@ -1759,8 +1881,562 @@ function App() {
 
                 </div>
 
+                {selectedHistoryLab && (
+                  <div className="history-lab-output">
+                    <div className="lab-detail-header">
+                      <div>
+                        <h3>Lab {selectedHistoryLab.lab_no} — Test Outputs</h3>
+                        <p>Heat No: {selectedHistoryLab.heat_no || "-"}</p>
+                      </div>
+                      <button className="close-button" onClick={() => setSelectedHistoryLab(null)}>×</button>
+                    </div>
+                    <TestChecklist lab={selectedHistoryLab} />
+                  </div>
+                )}
+
               </div>
 
+            )}
+
+          </>
+        )}
+
+
+        {/* ISO / NABL COMPLIANCE VIEW */}
+
+        {activeView === "compliance" && (
+          <>
+
+            <div className="page-title">
+              <h2>
+                ISO / NABL Report Compliance
+              </h2>
+
+              <p>
+                Check report-format and accreditation indicators
+                separately from technical PASS / FAIL testing.
+              </p>
+            </div>
+
+
+            <div className="upload-card">
+
+              <div
+                style={{
+                  maxWidth: "560px",
+                  margin: "0 auto"
+                }}
+              >
+                <UploadCard
+                  title="Test Reports"
+                  file={complianceReport}
+                  setFile={setComplianceReport}
+                />
+              </div>
+
+
+              <button
+                className="analyze-button"
+                disabled={
+                  !complianceReport ||
+                  complianceLoading
+                }
+                onClick={
+                  analyzeReportCompliance
+                }
+              >
+                {
+                  complianceLoading
+                    ? "Checking ISO / NABL Compliance..."
+                    : "Check ISO / NABL Compliance"
+                }
+              </button>
+
+
+              {complianceLoading && (
+                <div className="loading-text">
+                  Checking report information, ISO/IEC 17025
+                  reporting requirements and NABL indicators...
+                </div>
+              )}
+
+
+              {error && (
+                <div className="error-message">
+                  {error}
+                </div>
+              )}
+
+            </div>
+
+
+            {complianceResult && (
+              <div className="results-section">
+
+                <div className="result-header">
+
+                  <div>
+                    <h2>
+                      Report Compliance Result
+                    </h2>
+
+                    <p>
+                      {complianceResult.standard}
+                    </p>
+                  </div>
+
+                </div>
+
+
+                <div className="job-info">
+
+                  <div>
+                    <span>
+                      ISO 17025 Report Status
+                    </span>
+                    <strong
+                      className={
+                        `status-text ${
+                          (
+                            complianceResult
+                              .iso_overall_status ||
+                            "review"
+                          ).toLowerCase()
+                        }`
+                      }
+                    >
+                      {
+                        complianceResult
+                          .iso_overall_status ||
+                        "REVIEW"
+                      }
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      NABL Scope Status
+                    </span>
+                    <strong>
+                      {
+                        complianceResult
+                          .nabl_overall_status ||
+                        "NOT VERIFIED"
+                      }
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Reports Checked
+                    </span>
+                    <strong>
+                      {
+                        complianceResult
+                          .report_count ||
+                        0
+                      }
+                    </strong>
+                  </div>
+
+                </div>
+
+
+                <div className="detail-section">
+                  <h3>
+                    What this status means
+                  </h3>
+
+                  <p>
+                    This page checks report documentation and
+                    accreditation indicators only. It does not
+                    change technical job PASS, FAIL, MISSING or
+                    REVIEW results.
+                  </p>
+
+                  <p>
+                    {
+                      complianceResult
+                        .nabl_note
+                    }
+                  </p>
+                </div>
+
+
+                <div className="lab-table">
+
+                  <div className="table-header">
+                    <span>
+                      Report / Lab
+                    </span>
+
+                    <span>
+                      ISO Status
+                    </span>
+
+                    <span>
+                      NABL Status
+                    </span>
+                  </div>
+
+
+                  {
+                    (
+                      complianceResult
+                        .reports ||
+                      []
+                    ).map(
+                      (report, index) => (
+
+                        <div
+                          className="table-row clickable"
+                          key={
+                            `${report.page_number}-${report.document_type}-${index}`
+                          }
+                          onClick={() =>
+                            setSelectedComplianceReport(
+                              report
+                            )
+                          }
+                        >
+
+                          <span>
+                            {
+                              report.report_no ||
+                              report.lab_no ||
+                              `Page ${report.page_number}`
+                            }
+                          </span>
+
+                          <span
+                            className={
+                              `status-text ${
+                                (
+                                  report
+                                    .iso_status ||
+                                  "review"
+                                ).toLowerCase()
+                              }`
+                            }
+                          >
+                            {
+                              report
+                                .iso_status ||
+                              "REVIEW"
+                            }
+                          </span>
+
+                          <span>
+                            {
+                              report
+                                .nabl_status ||
+                              "NOT VERIFIED"
+                            }
+                          </span>
+
+                        </div>
+                      )
+                    )
+                  }
+
+                </div>
+
+              </div>
+            )}
+
+
+            {selectedComplianceReport && (
+              <div className="lab-detail-card">
+
+                <div className="lab-detail-header">
+
+                  <div>
+                    <h2>
+                      {
+                        selectedComplianceReport
+                          .report_no ||
+                        `Lab ${
+                          selectedComplianceReport
+                            .lab_no ||
+                          "-"
+                        }`
+                      }
+                    </h2>
+
+                    <p>
+                      {
+                        formatTestName(
+                          selectedComplianceReport
+                            .document_type
+                        )
+                      }
+                      {" · "}
+                      Report page {
+                        selectedComplianceReport
+                          .page_number
+                      }
+                    </p>
+                  </div>
+
+
+                  <button
+                    className="close-button"
+                    onClick={() =>
+                      setSelectedComplianceReport(
+                        null
+                      )
+                    }
+                  >
+                    ×
+                  </button>
+
+                </div>
+
+
+                <div className="job-info">
+
+                  <div>
+                    <span>
+                      ISO Status
+                    </span>
+                    <strong
+                      className={
+                        `status-text ${
+                          (
+                            selectedComplianceReport
+                              .iso_status ||
+                            "review"
+                          ).toLowerCase()
+                        }`
+                      }
+                    >
+                      {
+                        selectedComplianceReport
+                          .iso_status ||
+                        "REVIEW"
+                      }
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      NABL Status
+                    </span>
+                    <strong>
+                      {
+                        selectedComplianceReport
+                          .nabl_status ||
+                        "NOT VERIFIED"
+                      }
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      ISO Issues
+                    </span>
+                    <strong>
+                      {
+                        selectedComplianceReport
+                          .iso_issue_count ||
+                        0
+                      }
+                    </strong>
+                  </div>
+
+                </div>
+
+
+                <div className="detail-section">
+
+                  <h3>
+                    ISO/IEC 17025 Report Checks
+                  </h3>
+
+                  {
+                    (
+                      selectedComplianceReport
+                        .iso_checks ||
+                      []
+                    ).map(
+                      (check, index) => (
+
+                        <div
+                          className="issue-item"
+                          key={
+                            `${check.code}-${index}`
+                          }
+                          style={{
+                            marginBottom: "12px"
+                          }}
+                        >
+
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent:
+                                "space-between",
+                              gap: "16px",
+                              alignItems:
+                                "flex-start"
+                            }}
+                          >
+
+                            <div>
+                              <strong>
+                                {check.label}
+                              </strong>
+
+                              <div
+                                style={{
+                                  marginTop: "5px"
+                                }}
+                              >
+                                Clause: {
+                                  check.clause ||
+                                  "-"
+                                }
+                              </div>
+
+                              <div
+                                style={{
+                                  marginTop: "5px"
+                                }}
+                              >
+                                {check.detail}
+                              </div>
+
+                              {
+                                check.evidence && (
+                                  <div
+                                    style={{
+                                      marginTop:
+                                        "5px"
+                                    }}
+                                  >
+                                    Evidence: {
+                                      check.evidence
+                                    }
+                                  </div>
+                                )
+                              }
+                            </div>
+
+
+                            <span
+                              className={
+                                `status-text ${
+                                  (
+                                    check.status ||
+                                    "review"
+                                  ).toLowerCase()
+                                }`
+                              }
+                            >
+                              {
+                                check.status ||
+                                "REVIEW"
+                              }
+                            </span>
+
+                          </div>
+
+                        </div>
+                      )
+                    )
+                  }
+
+                </div>
+
+
+                <div className="detail-section">
+
+                  <h3>
+                    NABL Scope Verification
+                  </h3>
+
+                  {
+                    (
+                      selectedComplianceReport
+                        .nabl_checks ||
+                      []
+                    ).length > 0
+                      ? (
+                          selectedComplianceReport
+                            .nabl_checks
+                            .map(
+                              (check, index) => (
+                                <div
+                                  className="issue-item"
+                                  key={
+                                    `nabl-${check.code}-${index}`
+                                  }
+                                >
+                                  <strong>
+                                    {check.label}
+                                  </strong>
+
+                                  <div
+                                    style={{
+                                      marginTop: "5px"
+                                    }}
+                                  >
+                                    Status: {
+                                      selectedComplianceReport
+                                        .nabl_status ||
+                                      "NOT VERIFIED"
+                                    }
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      marginTop: "5px"
+                                    }}
+                                  >
+                                    {check.detail}
+                                  </div>
+
+                                  {
+                                    check.evidence && (
+                                      <div
+                                        style={{
+                                          marginTop: "5px"
+                                        }}
+                                      >
+                                        Evidence: {
+                                          check.evidence
+                                        }
+                                      </div>
+                                    )
+                                  }
+                                </div>
+                              )
+                            )
+                        )
+                      : (
+                          <p>
+                            NABL scope could not be matched reliably from this report.
+                          </p>
+                        )
+                  }
+
+                </div>
+
+
+                <div className="recommended-action">
+                  <h3>
+                    Important
+                  </h3>
+
+                  <p>
+                    NABL REVIEW does not mean the test failed.
+                    It means current accreditation/scope could
+                    not be independently verified from this
+                    report alone.
+                  </p>
+                </div>
+
+              </div>
             )}
 
           </>
